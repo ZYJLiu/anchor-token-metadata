@@ -1,0 +1,25 @@
+[package]
+name = "token-metadata"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "token_metadata"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = "0.29.0"
+anchor-spl = "0.29.0"
+solana-program = "1.16.16"
+spl-token-2022 = "0.9.0"
+spl-token-metadata-interface = "0.2.0"
+spl-type-length-value = "0.3.0"
+spl-pod = "0.1.0"
