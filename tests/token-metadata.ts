@@ -22,6 +22,7 @@ import {
   unpack,
   pack,
   TokenMetadata,
+  createUpdateFieldInstruction,
 } from "@solana/spl-token-metadata";
 
 describe("token-metadata", () => {
@@ -52,7 +53,10 @@ describe("token-metadata", () => {
     name: "name",
     symbol: "symbol",
     uri: "uri",
-    additionalMetadata: [["key1", "value1"]],
+    additionalMetadata: [
+      ["key1", "value1"],
+      ["key1", ""], // Remove value
+    ],
   };
 
   it("Is initialized!", async () => {
@@ -75,7 +79,7 @@ describe("token-metadata", () => {
     const initializeMetadataPointerInstruction =
       createInitializeMetadataPointerInstruction(
         mintPublicKey,
-        wallet.publicKey, // Update authority
+        wallet.publicKey, // Pointer update authority
         metadataPDA,
         TOKEN_2022_PROGRAM_ID
       );
@@ -93,7 +97,7 @@ describe("token-metadata", () => {
     const initializeMetadataInstruction = createInitializeInstruction({
       programId: program.programId,
       metadata: metadataPDA,
-      updateAuthority: program.programId,
+      updateAuthority: metaData.updateAuthority,
       mint: mintPublicKey,
       mintAuthority: wallet.publicKey,
       name: metaData.name,
@@ -119,6 +123,114 @@ describe("token-metadata", () => {
       connection,
       transaction,
       [wallet.payer, mintKeypair],
+      { skipPreflight: true, commitment: "confirmed" }
+    );
+
+    console.log(
+      "\nCreate Mint Account:",
+      `https://solana.fm/tx/${transactionSignature}?cluster=devnet-solana`
+    );
+
+    // Check mint account metadata pointer matches the PDA
+    const mintInfo = await getMint(
+      connection,
+      mintPublicKey,
+      "confirmed",
+      TOKEN_2022_PROGRAM_ID
+    );
+    const metadataPointer = getMetadataPointerState(mintInfo);
+    console.log(
+      "\nMetadata Pointer:",
+      JSON.stringify(metadataPointer, null, 2)
+    );
+    console.log("\nMetadata PDA:", metadataPDA.toString());
+
+    // Check metadata account data updated correctly
+    const metadataAccount = await connection.getAccountInfo(metadataPDA);
+    // Metadata starts with offset of 12 bytes
+    // 8 byte discriminator + 4 byte extra offset? (not sure)
+    let unpackedData = unpack(metadataAccount.data.subarray(12));
+    console.log("\nMetadata:", JSON.stringify(unpackedData, null, 2));
+
+    // const validIndex = findValidUnpackIndex(metadataAccount.data);
+  });
+
+  it("Update Field, add data", async () => {
+    const updateFieldInstruction = createUpdateFieldInstruction({
+      programId: program.programId, // custom metadata program
+      metadata: metadataPDA, // use mint as metadata address
+      updateAuthority: metaData.updateAuthority,
+      field: metaData.additionalMetadata[0][0],
+      value: metaData.additionalMetadata[0][1],
+    });
+    // Additional accounts required by our instruction
+    // Used to create the metadata account via CPI in the program instruction
+    updateFieldInstruction.keys.push(
+      { isSigner: false, isWritable: false, pubkey: mintPublicKey },
+      { isSigner: true, isWritable: true, pubkey: wallet.publicKey },
+      { isSigner: false, isWritable: false, pubkey: SystemProgram.programId }
+    );
+
+    const transaction = new Transaction().add(updateFieldInstruction);
+
+    const transactionSignature = await sendAndConfirmTransaction(
+      connection,
+      transaction,
+      [wallet.payer],
+      { skipPreflight: true, commitment: "confirmed" }
+    );
+
+    console.log(
+      "\nCreate Mint Account:",
+      `https://solana.fm/tx/${transactionSignature}?cluster=devnet-solana`
+    );
+
+    // Check mint account metadata pointer matches the PDA
+    const mintInfo = await getMint(
+      connection,
+      mintPublicKey,
+      "confirmed",
+      TOKEN_2022_PROGRAM_ID
+    );
+    const metadataPointer = getMetadataPointerState(mintInfo);
+    console.log(
+      "\nMetadata Pointer:",
+      JSON.stringify(metadataPointer, null, 2)
+    );
+    console.log("\nMetadata PDA:", metadataPDA.toString());
+
+    // Check metadata account data updated correctly
+    const metadataAccount = await connection.getAccountInfo(metadataPDA);
+    // Metadata starts with offset of 12 bytes
+    // 8 byte discriminator + 4 byte extra offset? (not sure)
+    let unpackedData = unpack(metadataAccount.data.subarray(12));
+    console.log("\nMetadata:", JSON.stringify(unpackedData, null, 2));
+
+    // const validIndex = findValidUnpackIndex(metadataAccount.data);
+  });
+
+  it("Update Field, reduce data", async () => {
+    const updateFieldInstruction = createUpdateFieldInstruction({
+      programId: program.programId, // custom metadata program
+      metadata: metadataPDA, // use mint as metadata address
+      updateAuthority: metaData.updateAuthority,
+      field: metaData.additionalMetadata[0][0],
+      value: metaData.additionalMetadata[1][1],
+    });
+    // Additional accounts required by our instruction
+    // Used to create the metadata account via CPI in the program instruction
+    updateFieldInstruction.keys.push(
+      { isSigner: false, isWritable: false, pubkey: mintPublicKey },
+      { isSigner: true, isWritable: true, pubkey: wallet.publicKey },
+      { isSigner: false, isWritable: false, pubkey: SystemProgram.programId }
+    );
+
+    const transaction = new Transaction().add(updateFieldInstruction);
+
+    const transactionSignature = await sendAndConfirmTransaction(
+      connection,
+      transaction,
+      [wallet.payer],
       { skipPreflight: true, commitment: "confirmed" }
     );
 
